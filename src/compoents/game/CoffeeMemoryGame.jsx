@@ -138,16 +138,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <p className={`transition-colors ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>{t('selectGame')}</p>
           </div>
           <div className="flex items-center gap-4">
-            <div className={`p-4 rounded-xl shadow-lg border-2 transition-colors ${
-              isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-100 border-amber-200'
-            }`}>
-              <Coffee className={`inline w-6 h-6 mr-2 transition-colors ${
-                isDarkMode ? 'text-amber-500' : 'text-amber-600'
-              }`} />
-              <span className={`font-bold text-xl transition-colors ${
-                isDarkMode ? 'text-amber-500' : 'text-amber-800'
-              }`}>{coffeeBeans}</span>
-            </div>
+            
             <LanguageSelector isDarkMode={isDarkMode} />
           </div>
         </div>

@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from "react";
-import { ArrowLeft, Coffee, Zap, Check, Users } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import { ArrowLeft, Coffee, Zap, Check, Users, X } from "lucide-react";
 
 
 
@@ -413,7 +413,7 @@ export default function CoffeeNameThreeThings({
     const [newPlayerName, setNewPlayerName] = useState("");
     const [currentPlayer, setCurrentPlayer] = useState(0);
     const [currentPrompt, setCurrentPrompt] = useState(null);
-    const [timeLeft, setTimeLeft] = useState(15);
+    const [timeLeft, setTimeLeft] = useState(5);
     const [roundResult, setRoundResult] = useState(null);
     const [rounds, setRounds] = useState(0);
     const [maxRounds, setMaxRounds] = useState(10);
@@ -422,6 +422,49 @@ export default function CoffeeNameThreeThings({
     const [adultContentEnabled, setAdultContentEnabled] = useState(false);
     const [showAgeVerification, setShowAgeVerification] = useState(false);
     const [userAnswers, setUserAnswers] = useState(["", "", ""]);
+    const [showIntro, setShowIntro] = useState(true);
+    const [showResultPopup, setShowResultPopup] = useState(false);
+    const tickSoundRef = useRef(null);
+    const urgentSoundRef = useRef(null);
+    const promptCardRef = useRef(null);
+
+    // Initialize audio on mount
+    useEffect(() => {
+        const AudioContext = window.AudioContext || window.webkitAudioContext;
+        if (AudioContext) {
+            const audioContext = new AudioContext();
+            
+            const createBeep = (frequency, duration) => {
+                return () => {
+                    const oscillator = audioContext.createOscillator();
+                    const gainNode = audioContext.createGain();
+                    
+                    oscillator.connect(gainNode);
+                    gainNode.connect(audioContext.destination);
+                    
+                    oscillator.frequency.value = frequency;
+                    oscillator.type = 'sine';
+                    
+                    gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration);
+                    
+                    oscillator.start(audioContext.currentTime);
+                    oscillator.stop(audioContext.currentTime + duration);
+                };
+            };
+            
+            tickSoundRef.current = createBeep(800, 0.1);
+            urgentSoundRef.current = createBeep(1200, 0.15);
+        }
+    }, []);
+
+    // Hide intro after animation
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            setShowIntro(false);
+        }, 2500);
+        return () => clearTimeout(timer);
+    }, []);
 
     // Add player
     const addPlayer = () => {
@@ -450,6 +493,11 @@ export default function CoffeeNameThreeThings({
         setRounds(0);
         setUsedPrompts([]);
         nextPrompt();
+        setTimeout(() => {
+            if (promptCardRef.current) {
+                promptCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
     };
 
     // Get next prompt
@@ -481,7 +529,7 @@ export default function CoffeeNameThreeThings({
             availablePrompts[Math.floor(Math.random() * availablePrompts.length)];
         setCurrentPrompt(randomPrompt);
         setUsedPrompts([...usedPrompts, randomPrompt.id]);
-        setTimeLeft(15);
+        setTimeLeft(5);
         setRoundResult(null);
         setUserAnswers(["", "", ""]);
         setGameState("playing");
@@ -493,7 +541,7 @@ export default function CoffeeNameThreeThings({
         setPlayers([]);
         setCurrentPlayer(0);
         setCurrentPrompt(null);
-        setTimeLeft(15);
+        setTimeLeft(5);
         setRoundResult(null);
         setRounds(0);
         setUsedPrompts([]);
@@ -516,38 +564,47 @@ export default function CoffeeNameThreeThings({
         setShowAgeVerification(false);
     };
 
-    // Submit answers
-    const submitAnswers = () => {
-        const filledAnswers = userAnswers.filter(answer => answer.trim() !== "").length;
-        if (filledAnswers === 3) {
-            setRoundResult("success");
-            const updatedPlayers = [...players];
-            updatedPlayers[currentPlayer].score += currentPrompt.points;
-            setPlayers(updatedPlayers);
-            setCoffeeBeans((prev) => prev + currentPrompt.points);
-        } else {
-            setRoundResult("partial");
-            const partialPoints = Math.floor((currentPrompt.points * filledAnswers) / 3);
-            const updatedPlayers = [...players];
-            updatedPlayers[currentPlayer].score += partialPoints;
-            setPlayers(updatedPlayers);
-            setCoffeeBeans((prev) => prev + partialPoints);
-        }
-        setGameState("result");
+    // Submit answers - for correct answer
+    const submitCorrectAnswer = () => {
+        setRoundResult("success");
+        const updatedPlayers = [...players];
+        updatedPlayers[currentPlayer].score += currentPrompt.points;
+        setPlayers(updatedPlayers);
+        setCoffeeBeans((prev) => prev + currentPrompt.points);
+        setShowResultPopup(true);
+    };
+
+    // Submit wrong answer
+    const submitWrongAnswer = () => {
+        setRoundResult("failed");
+        setShowResultPopup(true);
+    };
+
+    // Close popup and continue
+    const closeResultPopup = () => {
+        setShowResultPopup(false);
+        nextRound();
     };
 
     // Timer effect
     useEffect(() => {
         let timer;
-        if (gameState === "playing" && timeLeft > 0) {
+        if (gameState === "playing" && timeLeft > 0 && !showResultPopup) {
+            // Play sound effects
+            if (timeLeft <= 3 && urgentSoundRef.current) {
+                urgentSoundRef.current();
+            } else if (tickSoundRef.current) {
+                tickSoundRef.current();
+            }
+            
             timer = setTimeout(() => {
                 setTimeLeft((t) => t - 1);
             }, 1000);
-        } else if (gameState === "playing" && timeLeft === 0) {
-            submitAnswers();
+        } else if (gameState === "playing" && timeLeft === 0 && !showResultPopup) {
+            submitWrongAnswer();
         }
         return () => clearTimeout(timer);
-    }, [timeLeft, gameState]);
+    }, [timeLeft, gameState, showResultPopup]);
 
     // Next round effect
     const nextRound = () => {
@@ -562,7 +619,45 @@ export default function CoffeeNameThreeThings({
         const nextPlayer = (currentPlayer + 1) % players.length;
         setCurrentPlayer(nextPlayer);
         nextPrompt();
+        setTimeout(() => {
+            if (promptCardRef.current) {
+                promptCardRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }, 100);
     };
+
+    // Intro Animation
+    if (showIntro) {
+        return (
+            <div className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center z-50 p-4">
+                <div className={`text-center animate-fadeIn ${isMobile ? "px-4 max-w-xs" : "px-8"}`}>
+                    {/* Animated Icon */}
+                    <div className={`${isMobile ? "mb-4" : "mb-6"} animate-bounce`}>
+                        <div className={`${isMobile ? "text-6xl" : "text-8xl sm:text-9xl md:text-[12rem]"} mb-2`}>🎯</div>
+                    </div>
+                    
+                    {/* Title with gradient */}
+                    <h1 className={`${isMobile ? "text-2xl" : "text-4xl sm:text-5xl md:text-6xl lg:text-7xl"} font-bold mb-3 bg-gradient-to-r from-cyan-400 via-teal-400 to-blue-400 bg-clip-text text-transparent animate-pulse`}>
+                        سمي 3 حاجات
+                    </h1>
+                    
+                    {/* Subtitle */}
+                    <p className={`${isMobile ? "text-sm" : "text-xl sm:text-2xl md:text-3xl"} text-white/90 font-semibold mb-6`}>
+                        قول 3 إجابات بصوت عالي في 5 ثوان!
+                    </p>
+                    
+                    {/* Loading indicator */}
+                    <div className="flex justify-center gap-2 mb-3">
+                        <div className={`${isMobile ? "w-2 h-2" : "w-3 h-3"} bg-cyan-400 rounded-full animate-bounce`} style={{ animationDelay: '0ms' }}></div>
+                        <div className={`${isMobile ? "w-2 h-2" : "w-3 h-3"} bg-teal-400 rounded-full animate-bounce`} style={{ animationDelay: '150ms' }}></div>
+                        <div className={`${isMobile ? "w-2 h-2" : "w-3 h-3"} bg-blue-400 rounded-full animate-bounce`} style={{ animationDelay: '300ms' }}></div>
+                    </div>
+                    
+                    <p className={`text-white/60 ${isMobile ? "text-xs" : "text-sm sm:text-base"}`}>جاري التحميل...</p>
+                </div>
+            </div>
+        );
+    }
 
     // Age Verification Modal
     if (showAgeVerification) {
@@ -619,10 +714,10 @@ export default function CoffeeNameThreeThings({
                 } ${isMobile ? "px-4 pt-6 pb-24" : "px-8 pt-12 pb-8"}`}
             >
                 {/* Header */}
-                <div className="flex items-center justify-between mb-8">
+                <div className={`flex items-center justify-between ${isMobile ? "mb-4" : "mb-8"}`}>
                     <button
                         onClick={() => setCurrentGame("menu")}
-                        className={`rounded-xl p-3 transition-all duration-300 ${
+                        className={`rounded-xl ${isMobile ? "p-2" : "p-3"} transition-all duration-300 ${
                             isDarkMode 
                                 ? 'text-white hover:bg-white/20' 
                                 : 'text-gray-800 hover:bg-black/10'
@@ -631,23 +726,23 @@ export default function CoffeeNameThreeThings({
                         <ArrowLeft className={`${isMobile ? "w-5 h-5" : "w-6 h-6"}`} />
                     </button>
                     <div className="text-center flex-1">
-                        <h1 className={`font-bold ${isMobile ? "text-xl" : "text-4xl"} mb-2 transition-colors ${
+                        <h1 className={`font-bold ${isMobile ? "text-lg" : "text-4xl"} ${isMobile ? "mb-0.5" : "mb-2"} transition-colors ${
                             isDarkMode ? 'text-white' : 'text-gray-900'
                         }`}>
                             🎯 سمي 3 حاجات
                         </h1>
-                        <p className={`${isMobile ? "text-xs" : "text-base"} transition-colors ${
+                        <p className={`${isMobile ? "text-[10px]" : "text-base"} transition-colors ${
                             isDarkMode ? 'text-cyan-300' : 'text-cyan-700'
-                        }`}>اكتب 3 إجابات قبل انتهاء الوقت!</p>
+                        }`}>قول 3 إجابات في 5 ثوان!</p>
                     </div>
-                    <div className={`rounded-2xl shadow-lg ${isMobile ? "p-2" : "p-3"} ${
+                    <div className={`rounded-xl shadow-lg ${isMobile ? "p-1.5" : "p-3"} ${
                         isDarkMode 
                             ? 'bg-gradient-to-r from-amber-600 to-yellow-600' 
                             : 'bg-gradient-to-r from-amber-100 to-yellow-100'
                     }`}>
-                        <div className="flex items-center gap-2">
-                            <Coffee className={`${isMobile ? "w-4 h-4" : "w-5 h-5"} ${isDarkMode ? 'text-amber-100' : 'text-amber-600'}`} />
-                            <span className={`font-bold ${isMobile ? "text-sm" : "text-lg"} ${isDarkMode ? 'text-white' : 'text-amber-800'}`}>
+                        <div className={`flex items-center ${isMobile ? "gap-1" : "gap-2"}`}>
+                            <Coffee className={`${isMobile ? "w-3 h-3" : "w-5 h-5"} ${isDarkMode ? 'text-amber-100' : 'text-amber-600'}`} />
+                            <span className={`font-bold ${isMobile ? "text-xs" : "text-lg"} ${isDarkMode ? 'text-white' : 'text-amber-800'}`}>
                                 {coffeeBeans}
                             </span>
                         </div>
@@ -655,14 +750,14 @@ export default function CoffeeNameThreeThings({
                 </div>
 
                 {/* Game Setup */}
-                <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} gap-6 mb-8`}>
+                <div className={`grid ${isMobile ? "grid-cols-1" : "grid-cols-2"} ${isMobile ? "gap-3" : "gap-6"} ${isMobile ? "mb-4" : "mb-8"}`}>
                     {/* Add Players */}
-                    <div className={`rounded-2xl shadow-xl p-6 backdrop-blur-sm ${
+                    <div className={`rounded-2xl shadow-xl ${isMobile ? "p-4" : "p-6"} backdrop-blur-sm ${
                         isDarkMode 
                             ? 'bg-white/10 border border-white/20' 
                             : 'bg-white/90 border border-gray-200'
                     }`}>
-                        <h3 className={`${isMobile ? "text-lg" : "text-xl"} font-bold mb-4 ${
+                        <h3 className={`${isMobile ? "text-base" : "text-xl"} font-bold ${isMobile ? "mb-3" : "mb-4"} ${
                             isDarkMode ? 'text-white' : 'text-gray-900'
                         }`}>
                             👥 أضف لاعبين ({players.length}/8)
@@ -736,17 +831,17 @@ export default function CoffeeNameThreeThings({
                     </div>
 
                     {/* Game Settings */}
-                    <div className={`rounded-2xl shadow-xl p-6 backdrop-blur-sm ${
+                    <div className={`rounded-2xl shadow-xl ${isMobile ? "p-4" : "p-6"} backdrop-blur-sm ${
                         isDarkMode 
                             ? 'bg-white/10 border border-white/20' 
                             : 'bg-white/90 border border-gray-200'
                     }`}>
-                        <h3 className={`${isMobile ? "text-lg" : "text-xl"} font-bold mb-4 ${
+                        <h3 className={`${isMobile ? "text-base" : "text-xl"} font-bold ${isMobile ? "mb-3" : "mb-4"} ${
                             isDarkMode ? 'text-white' : 'text-gray-900'
                         }`}>⚙️ إعدادات اللعبة</h3>
 
                         {/* Difficulty */}
-                        <div className="mb-6">
+                        <div className={isMobile ? "mb-4" : "mb-6"}>
                             <p className={`text-sm font-medium mb-3 ${
                                 isDarkMode ? 'text-gray-300' : 'text-gray-700'
                             }`}>مستوى الصعوبة</p>
@@ -846,89 +941,92 @@ export default function CoffeeNameThreeThings({
                 </div>
 
                 {/* Game Rules */}
-                <div className={`rounded-2xl shadow-xl ${isMobile ? "p-4" : "p-6"} mb-8 backdrop-blur-sm ${
+                <div className={`rounded-2xl shadow-xl ${isMobile ? "p-3" : "p-6"} ${isMobile ? "mb-3" : "mb-8"} backdrop-blur-sm ${
                     isDarkMode 
                         ? 'bg-white/10 border border-white/20' 
                         : 'bg-white/90 border border-gray-200'
                 }`}>
-                    <h3 className={`${isMobile ? "text-lg" : "text-xl"} font-bold mb-4 ${
+                    <h3 className={`${isMobile ? "text-base" : "text-xl"} font-bold ${isMobile ? "mb-2" : "mb-4"} ${
                         isDarkMode ? 'text-white' : 'text-gray-900'
-                    }`}>📖 كيفاش تلعب</h3>
-                    <div className={`space-y-4 ${isMobile ? "text-sm" : "text-base"} ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
+                    }`}>📖 قواعد اللعبة</h3>
+                    <div className={`${isMobile ? "space-y-2" : "space-y-4"} ${isMobile ? "text-xs" : "text-base"} ${isDarkMode ? 'text-gray-300' : 'text-gray-700'}`}>
                         <div className="flex gap-3 items-start">
-                            <div className={`bg-teal-500 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                            <div className={`bg-gradient-to-br from-teal-500 to-cyan-600 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg`}>
                                 1
                             </div>
-                            <p>اكتب 3 إجابات في الموضوع المطلوب قبل انتهاء الوقت (15 ثانية)</p>
+                            <p><span className="font-bold">قول 3 أشياء</span> في الموضوع المطروح قبل انتهاء الوقت (5 ثوان فقط!)</p>
                         </div>
                         <div className="flex gap-3 items-start">
-                            <div className={`bg-cyan-500 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                            <div className={`bg-gradient-to-br from-cyan-500 to-blue-600 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg`}>
                                 2
                             </div>
-                            <p>كل إجابة لازم تكون مختلفة وتناسب الموضوع</p>
+                            <p><span className="font-bold">إجابة شفهية:</span> اللاعبون الآخرون يحكمون على إجاباتك</p>
                         </div>
                         <div className="flex gap-3 items-start">
-                            <div className={`bg-blue-500 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                            <div className={`bg-gradient-to-br from-blue-500 to-purple-600 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg`}>
                                 3
                             </div>
-                            <p>إذا كتبت 3 إجابات: تأخذ كامل النقاط حسب مستوى الصعوبة</p>
+                            <p><span className="font-bold">النقاط:</span> إجابة صحيحة = نقاط حسب الصعوبة • إجابة خاطئة = لا نقاط</p>
                         </div>
                         <div className="flex gap-3 items-start">
-                            <div className={`bg-purple-500 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0`}>
+                            <div className={`bg-gradient-to-br from-purple-500 to-pink-600 rounded-full ${isMobile ? "w-7 h-7 text-sm" : "w-8 h-8"} flex items-center justify-center text-white font-bold flex-shrink-0 shadow-lg`}>
                                 4
                             </div>
-                            <p>اللاعب اللي يجمع أكثر نقاط يربح</p>
+                            <p><span className="font-bold">الفوز:</span> اللاعب صاحب أعلى نقاط في النهاية يفوز! 🏆</p>
                         </div>
                     </div>
                 </div>
 
                 {/* Points System */}
-                <div className={`rounded-2xl shadow-xl ${isMobile ? "p-4" : "p-6"} backdrop-blur-sm ${
+                <div className={`rounded-2xl shadow-xl ${isMobile ? "p-3" : "p-6"} backdrop-blur-sm ${
                     isDarkMode 
                         ? 'bg-white/10 border border-white/20' 
                         : 'bg-white/90 border border-gray-200'
                 }`}>
-                    <h3 className={`${isMobile ? "text-lg" : "text-xl"} font-bold mb-4 ${
+                    <h3 className={`${isMobile ? "text-base" : "text-xl"} font-bold ${isMobile ? "mb-2" : "mb-4"} ${
                         isDarkMode ? 'text-white' : 'text-gray-900'
                     }`}>🏆 نظام النقاط</h3>
-                    <div className="grid grid-cols-3 gap-4">
-                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-xl text-center ${
-                            isDarkMode ? 'bg-green-900/50' : 'bg-green-50'
+                    <div className={`grid grid-cols-3 ${isMobile ? "gap-2" : "gap-3 md:gap-4"}`}>
+                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-2xl text-center relative overflow-hidden group hover:scale-105 transition-transform duration-300 ${
+                            isDarkMode ? 'bg-gradient-to-br from-green-900 to-emerald-900' : 'bg-gradient-to-br from-green-100 to-emerald-100'
                         }`}>
-                            <div className={`bg-green-500 text-white px-3 py-1 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-2`}>
-                                سهل
+                            <div className="absolute inset-0 bg-gradient-to-t from-green-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className={`relative bg-gradient-to-r from-green-500 to-emerald-600 text-white px-3 py-1.5 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-3 shadow-lg`}>
+                                سهل 😊
                             </div>
-                            <p className={`${isMobile ? "text-2xl" : "text-3xl"} font-bold ${
-                                isDarkMode ? 'text-green-400' : 'text-green-600'
+                            <p className={`${isMobile ? "text-3xl" : "text-4xl"} font-black mb-1 ${
+                                isDarkMode ? 'text-green-400' : 'text-green-700'
                             }`}>10</p>
-                            <p className={`text-xs ${
-                                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            <p className={`text-xs font-semibold ${
+                                isDarkMode ? 'text-green-300' : 'text-green-600'
                             }`}>نقاط</p>
                         </div>
-                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-xl text-center ${
-                            isDarkMode ? 'bg-yellow-900/50' : 'bg-yellow-50'
+                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-2xl text-center relative overflow-hidden group hover:scale-105 transition-transform duration-300 ${
+                            isDarkMode ? 'bg-gradient-to-br from-yellow-900 to-orange-900' : 'bg-gradient-to-br from-yellow-100 to-orange-100'
                         }`}>
-                            <div className={`bg-yellow-500 text-white px-3 py-1 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-2`}>
-                                متوسط
+                            <div className="absolute inset-0 bg-gradient-to-t from-yellow-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className={`relative bg-gradient-to-r from-yellow-500 to-orange-600 text-white px-3 py-1.5 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-3 shadow-lg`}>
+                                متوسط 🤔
                             </div>
-                            <p className={`${isMobile ? "text-2xl" : "text-3xl"} font-bold ${
-                                isDarkMode ? 'text-yellow-400' : 'text-yellow-600'
+                            <p className={`${isMobile ? "text-3xl" : "text-4xl"} font-black mb-1 ${
+                                isDarkMode ? 'text-yellow-400' : 'text-yellow-700'
                             }`}>15</p>
-                            <p className={`text-xs ${
-                                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            <p className={`text-xs font-semibold ${
+                                isDarkMode ? 'text-yellow-300' : 'text-yellow-600'
                             }`}>نقاط</p>
                         </div>
-                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-xl text-center ${
-                            isDarkMode ? 'bg-red-900/50' : 'bg-red-50'
+                        <div className={`${isMobile ? "p-3" : "p-4"} rounded-2xl text-center relative overflow-hidden group hover:scale-105 transition-transform duration-300 ${
+                            isDarkMode ? 'bg-gradient-to-br from-red-900 to-pink-900' : 'bg-gradient-to-br from-red-100 to-pink-100'
                         }`}>
-                            <div className={`bg-red-500 text-white px-3 py-1 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-2`}>
-                                صعب
+                            <div className="absolute inset-0 bg-gradient-to-t from-red-500/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            <div className={`relative bg-gradient-to-r from-red-500 to-pink-600 text-white px-3 py-1.5 rounded-full ${isMobile ? "text-xs" : "text-sm"} font-bold inline-block mb-3 shadow-lg`}>
+                                صعب 😤
                             </div>
-                            <p className={`${isMobile ? "text-2xl" : "text-3xl"} font-bold ${
-                                isDarkMode ? 'text-red-400' : 'text-red-600'
+                            <p className={`${isMobile ? "text-3xl" : "text-4xl"} font-black mb-1 ${
+                                isDarkMode ? 'text-red-400' : 'text-red-700'
                             }`}>20</p>
-                            <p className={`text-xs ${
-                                isDarkMode ? 'text-gray-400' : 'text-gray-600'
+                            <p className={`text-xs font-semibold ${
+                                isDarkMode ? 'text-red-300' : 'text-red-600'
                             }`}>نقاط</p>
                         </div>
                     </div>
@@ -939,7 +1037,6 @@ export default function CoffeeNameThreeThings({
 
     // Playing Phase
     if (gameState === "playing" && currentPrompt) {
-        const filledAnswers = userAnswers.filter(answer => answer.trim() !== "").length;
         return (
             <div
                 className={`min-h-screen transition-colors duration-300 ${
@@ -972,24 +1069,18 @@ export default function CoffeeNameThreeThings({
                     </div>
                     {/* Timer */}
                     <div className={`rounded-2xl shadow-xl ${isMobile ? "w-16 h-16" : "w-20 h-20"} flex items-center justify-center border-4 ${
-                        timeLeft > 10 
+                        timeLeft > 3 
                             ? isDarkMode 
                                 ? "bg-green-900/50 border-green-500" 
                                 : "bg-green-100 border-green-500"
-                            : timeLeft > 5
-                                ? isDarkMode
-                                    ? "bg-yellow-900/50 border-yellow-500"
-                                    : "bg-yellow-100 border-yellow-500"
                                 : isDarkMode
                                     ? "bg-red-900/50 border-red-500 animate-pulse"
                                     : "bg-red-100 border-red-500 animate-pulse"
                     }`}>
                         <span className={`${isMobile ? "text-3xl" : "text-4xl"} font-bold ${
-                            timeLeft > 10 
+                            timeLeft > 3 
                                 ? isDarkMode ? "text-green-400" : "text-green-600"
-                                : timeLeft > 5
-                                    ? isDarkMode ? "text-yellow-400" : "text-yellow-600"
-                                    : isDarkMode ? "text-red-400" : "text-red-600"
+                                : isDarkMode ? "text-red-400" : "text-red-600"
                         }`}>
                             {timeLeft}
                         </span>
@@ -997,7 +1088,7 @@ export default function CoffeeNameThreeThings({
                 </div>
 
                 {/* Prompt Card */}
-                <div className={`rounded-3xl shadow-2xl ${isMobile ? "p-4" : "p-6 md:p-8"} mb-6 ${
+                <div ref={promptCardRef} className={`rounded-3xl shadow-2xl ${isMobile ? "p-4" : "p-6 md:p-8"} mb-6 ${
                     currentPrompt.difficulty === "easy"
                         ? isDarkMode
                             ? 'bg-gradient-to-br from-green-900 to-emerald-900'
@@ -1010,6 +1101,22 @@ export default function CoffeeNameThreeThings({
                                 ? 'bg-gradient-to-br from-red-900 to-pink-900'
                                 : 'bg-gradient-to-br from-red-400 to-pink-500'
                 }`}>
+                    {/* Current Player Badge */}
+                    <div className="flex items-center justify-center mb-6">
+                        <div className={`bg-white/20 backdrop-blur-xl border-2 border-white/40 rounded-2xl ${isMobile ? "px-4 py-3" : "px-6 py-4"} flex items-center gap-3 shadow-2xl animate-pulse`}>
+                            <div className={`${isMobile ? "w-10 h-10 text-lg" : "w-12 h-12 text-xl"} rounded-xl bg-white/30 flex items-center justify-center text-white font-black shadow-lg`}>
+                                {players[currentPlayer].name.charAt(0).toUpperCase()}
+                            </div>
+                            <div className="text-left">
+                                <p className={`${isMobile ? "text-xs" : "text-sm"} text-white/80 font-medium mb-0.5`}>دور اللاعب</p>
+                                <p className={`${isMobile ? "text-base" : "text-xl"} text-white font-black`}>
+                                    {players[currentPlayer].name}
+                                </p>
+                            </div>
+                            <div className={`${isMobile ? "text-2xl" : "text-3xl"} animate-bounce`}>🎯</div>
+                        </div>
+                    </div>
+
                     <div className="text-center mb-6">
                         <div className={`inline-block px-4 py-2 rounded-full bg-white/20 backdrop-blur-sm ${isMobile ? "mb-2" : "mb-4"}`}>
                             {currentPrompt.isAdult && <span className="mr-2">🔞</span>}
@@ -1017,100 +1124,103 @@ export default function CoffeeNameThreeThings({
                                 {currentPrompt.category} • {currentPrompt.points} نقاط
                             </span>
                         </div>
-                        <h2 className={`font-bold text-white ${isMobile ? "text-lg" : "text-2xl md:text-4xl"} mb-2`}>
+                        <h2 className={`font-bold text-white ${isMobile ? "text-xl leading-tight" : "text-3xl md:text-5xl"} mb-4`}>
                             {currentPrompt.text}
                         </h2>
-                        <p className={`text-white/80 ${isMobile ? "text-xs" : "text-sm"}`}>اكتب 3 إجابات مختلفة</p>
+                        <p className={`text-white/90 ${isMobile ? "text-sm" : "text-lg md:text-xl"} font-semibold`}>قول 3 إجابات بصوت عالي!</p>
                     </div>
 
-                    {/* Answer Inputs */}
-                    <div className="space-y-3 mb-6">
-                        {[0, 1, 2].map((index) => (
-                            <div key={index} className={`flex items-center ${isMobile ? "gap-2" : "gap-2 md:gap-3"}`}>
-                                <div className={`${isMobile ? "w-7 h-7 text-xs" : "w-8 h-8 md:w-10 md:h-10 text-sm"} rounded-full bg-white/20 flex items-center justify-center text-white font-bold flex-shrink-0`}>
-                                    {index + 1}
+                    {/* Instructions */}
+                    <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-4 md:p-6 mb-6">
+                        <div className="flex items-center justify-center gap-3 mb-4">
+                            <div className="text-4xl md:text-5xl">🗣️</div>
+                            <p className={`text-white font-bold ${isMobile ? "text-base" : "text-xl md:text-2xl"}`}>
+                                اذكر 3 أشياء الآن!
+                            </p>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 md:gap-3">
+                            {[1, 2, 3].map((num) => (
+                                <div key={num} className="bg-white/20 rounded-xl p-3 md:p-4 text-center">
+                                    <div className={`text-white font-bold ${isMobile ? "text-2xl" : "text-3xl md:text-4xl"}`}>
+                                        {num}
+                                    </div>
+                                    <div className={`text-white/70 ${isMobile ? "text-xs" : "text-sm"} mt-1`}>
+                                        إجابة
+                                    </div>
                                 </div>
-                                <input
-                                    type="text"
-                                    value={userAnswers[index]}
-                                    onChange={(e) => {
-                                        const newAnswers = [...userAnswers];
-                                        newAnswers[index] = e.target.value;
-                                        setUserAnswers(newAnswers);
-                                    }}
-                                    onKeyPress={(e) => {
-                                        if (e.key === 'Enter' && index < 2) {
-                                            document.querySelectorAll('input[type="text"]')[index + 1]?.focus();
-                                        } else if (e.key === 'Enter' && index === 2 && filledAnswers === 3) {
-                                            submitAnswers();
-                                        }
-                                    }}
-                                    placeholder={`الإجابة ${index + 1}`}
-                                    className={`flex-1 ${isMobile ? "px-2 py-2 text-sm" : "px-3 py-2 md:px-4 md:py-3 text-base md:text-lg"} rounded-xl font-bold transition-all ${
-                                        userAnswers[index].trim()
-                                            ? 'bg-white text-gray-900 border-2 border-white shadow-lg'
-                                            : 'bg-white/50 text-gray-700 border-2 border-white/30'
-                                    } focus:outline-none focus:ring-2 focus:ring-white placeholder:text-sm ${isMobile ? "placeholder:text-xs" : ""}`}
-                                    disabled={timeLeft === 0}
-                                />
-                                {userAnswers[index].trim() && (
-                                    <Check className={`${isMobile ? "w-4 h-4" : "w-5 h-5 md:w-6 md:h-6"} text-white flex-shrink-0`} />
-                                )}
+                            ))}
+                        </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="grid grid-cols-2 gap-3 md:gap-4">
+                        <button
+                            onClick={submitCorrectAnswer}
+                            disabled={timeLeft === 0}
+                            className={`${isMobile ? "py-5 text-base" : "py-6 md:py-7 text-lg md:text-xl"} rounded-2xl font-black transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-2xl relative overflow-hidden group ${
+                                timeLeft === 0
+                                    ? 'bg-gray-400 cursor-not-allowed text-white/50'
+                                    : 'bg-gradient-to-br from-green-500 to-emerald-600 text-white hover:scale-105 hover:shadow-[0_20px_50px_rgba(16,185,129,0.5)]'
+                            }`}
+                        >
+                            {timeLeft > 0 && (
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            )}
+                            <div className="relative">
+                                <div className={`${isMobile ? "w-12 h-12" : "w-14 h-14"} mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center`}>
+                                    <Check className={`${isMobile ? "w-7 h-7" : "w-8 h-8"}`} strokeWidth={3} />
+                                </div>
+                                <span className="block mb-1">إجابة صحيحة</span>
+                                <span className={`${isMobile ? "text-xs" : "text-sm"} bg-white/30 px-3 py-1 rounded-full inline-block font-bold`}>+{currentPrompt.points} نقطة</span>
                             </div>
-                        ))}
+                        </button>
+                        <button
+                            onClick={submitWrongAnswer}
+                            disabled={timeLeft === 0}
+                            className={`${isMobile ? "py-5 text-base" : "py-6 md:py-7 text-lg md:text-xl"} rounded-2xl font-black transition-all duration-300 flex flex-col items-center justify-center gap-2 shadow-2xl relative overflow-hidden group ${
+                                timeLeft === 0
+                                    ? 'bg-gray-400 cursor-not-allowed text-white/50'
+                                    : 'bg-gradient-to-br from-red-500 to-pink-600 text-white hover:scale-105 hover:shadow-[0_20px_50px_rgba(239,68,68,0.5)]'
+                            }`}
+                        >
+                            {timeLeft > 0 && (
+                                <div className="absolute inset-0 bg-gradient-to-t from-white/0 to-white/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                            )}
+                            <div className="relative">
+                                <div className={`${isMobile ? "w-12 h-12" : "w-14 h-14"} mx-auto mb-2 rounded-full bg-white/20 flex items-center justify-center`}>
+                                    <X className={`${isMobile ? "w-7 h-7" : "w-8 h-8"}`} strokeWidth={3} />
+                                </div>
+                                <span className="block mb-1">إجابة خاطئة</span>
+                                <span className={`${isMobile ? "text-xs" : "text-sm"} bg-white/30 px-3 py-1 rounded-full inline-block font-bold`}>0 نقطة</span>
+                            </div>
+                        </button>
                     </div>
-
-                    {/* Progress Indicator */}
-                    <div className="bg-white/20 rounded-full h-3 overflow-hidden mb-4">
-                        <div
-                            className="h-full bg-white transition-all duration-300"
-                            style={{ width: `${(filledAnswers / 3) * 100}%` }}
-                        />
-                    </div>
-                    <p className={`text-white text-center ${isMobile ? "text-xs" : "text-sm"} mb-6`}>
-                        {filledAnswers === 0 && "ابدأ بكتابة إجاباتك"}
-                        {filledAnswers === 1 && "رائع! اكتب إجابتين أخرى"}
-                        {filledAnswers === 2 && "ممتاز! إجابة واحدة فقط"}
-                        {filledAnswers === 3 && "👏 كل الإجابات جاهزة!"}
-                    </p>
-
-                    {/* Submit Button */}
-                    <button
-                        onClick={submitAnswers}
-                        disabled={timeLeft === 0 || filledAnswers === 0}
-                        className={`w-full ${isMobile ? "py-3 text-lg" : "py-4 text-xl"} rounded-xl font-bold transition-all duration-300 flex items-center justify-center gap-2 ${
-                            timeLeft === 0 || filledAnswers === 0
-                                ? 'bg-gray-500 cursor-not-allowed text-white/50'
-                                : filledAnswers === 3
-                                    ? 'bg-white text-green-600 shadow-2xl hover:scale-105'
-                                    : 'bg-white/70 text-gray-700 hover:bg-white/90'
-                        }`}
-                    >
-                        <Check className={`${isMobile ? "w-5 h-5" : "w-6 h-6"}`} />
-                        {filledAnswers === 3 ? 'تأكيد الإجابات ✓' : `إرسال (${filledAnswers}/3)`}
-                    </button>
                 </div>
 
                 {/* Visual Timer Progress */}
                 <div className="mb-6">
-                    <div className={`rounded-full h-3 overflow-hidden ${
+                    <div className={`rounded-full ${isMobile ? "h-4" : "h-5"} overflow-hidden ${
                         isDarkMode ? 'bg-white/20' : 'bg-gray-300'
                     }`}>
                         <div
                             className={`h-full transition-all duration-1000 ease-linear ${
-                                timeLeft > 10 
+                                timeLeft > 3 
                                     ? "bg-green-500" 
-                                    : timeLeft > 5 
-                                        ? "bg-yellow-500" 
-                                        : "bg-red-500"
+                                    : "bg-red-500 animate-pulse"
                             }`}
-                            style={{ width: `${(timeLeft / 15) * 100}%` }}
+                            style={{ width: `${(timeLeft / 5) * 100}%` }}
                         />
                     </div>
-                    <p className={`text-center mt-2 ${isMobile ? "text-sm" : "text-base"} font-semibold ${
+                    <p className={`text-center mt-3 ${isMobile ? "text-base" : "text-lg md:text-xl"} font-bold ${
                         isDarkMode ? 'text-white' : 'text-gray-900'
                     }`}>
-                        {timeLeft > 0 ? `${timeLeft} ثانية متبقية` : "انتهى الوقت!"}
+                        {timeLeft > 0 ? (
+                            <span className={timeLeft <= 3 ? 'text-red-500 animate-pulse' : ''}>
+                                ⏱️ {timeLeft} ثوان متبقية
+                            </span>
+                        ) : (
+                            <span className="text-red-500">⏰ انتهى الوقت!</span>
+                        )}
                     </p>
                 </div>
 
@@ -1151,15 +1261,119 @@ export default function CoffeeNameThreeThings({
                         ))}
                     </div>
                 </div>
+
+                {/* Result Popup - Professional Design */}
+                {showResultPopup && (
+                    <div className="fixed inset-0 bg-gradient-to-br from-black/80 via-black/70 to-black/80 backdrop-blur-xl flex items-center justify-center z-50 p-4 animate-fadeIn">
+                        <div className={`${isMobile ? "w-full max-w-[95vw]" : "max-w-lg w-full"} relative`} style={{ animation: 'slideUp 0.4s ease-out' }}>
+                            {/* Glassmorphism Card */}
+                            <div className={`rounded-3xl backdrop-blur-2xl border shadow-2xl overflow-hidden ${
+                                roundResult === "success"
+                                    ? 'bg-gradient-to-br from-emerald-500/20 via-teal-500/20 to-green-500/20 border-emerald-400/30'
+                                    : 'bg-gradient-to-br from-rose-500/20 via-red-500/20 to-pink-500/20 border-rose-400/30'
+                            }`}>
+                                {/* Gradient Overlay */}
+                                <div className={`absolute inset-0 opacity-10 ${
+                                    roundResult === "success" 
+                                        ? 'bg-gradient-to-br from-emerald-400 to-teal-600' 
+                                        : 'bg-gradient-to-br from-rose-400 to-pink-600'
+                                }`}></div>
+                                
+                                <div className={`relative ${isMobile ? "p-5" : "p-10"}`}>
+                                    {/* Status Badge */}
+                                    <div className="flex justify-center mb-4">
+                                        <div className={`inline-flex items-center ${isMobile ? "gap-2 px-4 py-2" : "gap-3 px-6 py-3"} rounded-full backdrop-blur-xl border-2 ${
+                                            roundResult === "success"
+                                                ? 'bg-emerald-500/30 border-emerald-400/50'
+                                                : 'bg-rose-500/30 border-rose-400/50'
+                                        }`}>
+                                            <div className={`${isMobile ? "text-2xl" : "text-4xl"}`}>
+                                                {roundResult === "success" ? "✓" : "✕"}
+                                            </div>
+                                            <span className={`${isMobile ? "text-base" : "text-2xl"} font-bold text-white`}>
+                                                {roundResult === "success" ? "إجابة صحيحة" : "إجابة خاطئة"}
+                                            </span>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Points Display */}
+                                    <div className="text-center mb-5">
+                                        <p className={`${isMobile ? "text-xs" : "text-base"} text-white/70 mb-1 uppercase tracking-wider font-semibold`}>
+                                            {roundResult === "success" ? "النقاط المكتسبة" : "النقاط"}
+                                        </p>
+                                        <div className={`${isMobile ? "text-5xl" : "text-7xl"} font-black text-white mb-1`}>
+                                            {roundResult === "success" ? `+${currentPrompt.points}` : "0"}
+                                        </div>
+                                        <p className={`${isMobile ? "text-sm" : "text-lg"} text-white/80 font-medium`}>
+                                            {roundResult === "success" ? "نقطة رائعة! 🌟" : "حاول مرة أخرى"}
+                                        </p>
+                                    </div>
+                                    
+                                    {/* Divider */}
+                                    <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent mb-4"></div>
+                                    
+                                    {/* Question */}
+                                    <div className={`bg-white/10 backdrop-blur-xl rounded-2xl ${isMobile ? "p-3" : "p-4"} mb-3 border border-white/10`}>
+                                        <p className="text-xs text-white/60 mb-1.5 uppercase tracking-wide font-semibold">السؤال</p>
+                                        <p className={`${isMobile ? "text-xs" : "text-base"} text-white font-semibold leading-relaxed`}>
+                                            {currentPrompt.text}
+                                        </p>
+                                    </div>
+                                    
+                                    {/* Examples */}
+                                    <div className={`bg-white/10 backdrop-blur-xl rounded-2xl ${isMobile ? "p-3" : "p-4"} mb-3 border border-white/10`}>
+                                        <p className="text-xs text-white/60 mb-2 uppercase tracking-wide font-semibold">أمثلة صحيحة</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {currentPrompt.examples.slice(0, 3).map((example, index) => (
+                                                <span 
+                                                    key={index} 
+                                                    className={`bg-white/20 backdrop-blur-sm text-white ${isMobile ? "px-2 py-1 text-xs" : "px-3 py-1.5 text-sm"} rounded-lg font-medium border border-white/10`}
+                                                >
+                                                    {example}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Current Score */}
+                                    <div className={`bg-white/10 backdrop-blur-xl rounded-2xl ${isMobile ? "p-3" : "p-4"} mb-4 border border-white/10`}>
+                                        <div className="flex items-center justify-between">
+                                            <div>
+                                                <p className="text-xs text-white/60 mb-1 uppercase tracking-wide font-semibold">نقاطك الحالية</p>
+                                                <p className={`${isMobile ? "text-xl" : "text-3xl"} text-white font-black`}>
+                                                    {players[currentPlayer].score}
+                                                </p>
+                                            </div>
+                                            <div className={`${isMobile ? "w-12 h-12 text-lg" : "w-20 h-20 text-3xl"} rounded-2xl bg-gradient-to-br ${
+                                                roundResult === "success" 
+                                                    ? 'from-emerald-500 to-teal-600' 
+                                                    : 'from-rose-500 to-pink-600'
+                                            } flex items-center justify-center text-white font-black shadow-lg`}>
+                                                {players[currentPlayer].name.charAt(0).toUpperCase()}
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    {/* Continue Button */}
+                                    <button
+                                        onClick={closeResultPopup}
+                                        className={`w-full bg-white hover:bg-white/95 text-gray-900 font-black ${isMobile ? "py-3 text-sm" : "py-5 text-lg"} rounded-2xl shadow-2xl transition-all duration-300 hover:scale-[1.02] hover:shadow-[0_20px_60px_rgba(255,255,255,0.3)] flex items-center justify-center gap-2`}
+                                    >
+                                        <span>{rounds + 1 >= maxRounds ? "عرض النتائج النهائية" : "متابعة اللعب"}</span>
+                                        <span className={isMobile ? "text-base" : "text-xl"}>→</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
             </div>
         );
     }
 
     // Result Phase
     if (gameState === "result" && currentPrompt) {
-        const earnedPoints = roundResult === "success" 
-            ? currentPrompt.points 
-            : Math.floor((currentPrompt.points * userAnswers.filter(a => a.trim() !== "").length) / 3);
+        const earnedPoints = roundResult === "success" ? currentPrompt.points : 0;
         
         return (
             <div
@@ -1206,55 +1420,27 @@ export default function CoffeeNameThreeThings({
                 </div>
 
                 {/* Result Card */}
-                <div className={`rounded-3xl shadow-2xl mb-8 p-8 ${
+                <div className={`rounded-3xl shadow-2xl mb-8 ${isMobile ? "p-6" : "p-8"} ${
                     roundResult === "success"
                         ? isDarkMode
                             ? "bg-gradient-to-br from-green-900 to-teal-900"
                             : "bg-gradient-to-br from-green-400 to-teal-500"
-                        : roundResult === "partial"
-                            ? isDarkMode
-                                ? "bg-gradient-to-br from-yellow-900 to-orange-900"
-                                : "bg-gradient-to-br from-yellow-400 to-orange-500"
-                            : isDarkMode
-                                ? "bg-gradient-to-br from-red-900 to-pink-900"
-                                : "bg-gradient-to-br from-red-400 to-pink-500"
+                        : isDarkMode
+                            ? "bg-gradient-to-br from-red-900 to-pink-900"
+                            : "bg-gradient-to-br from-red-400 to-pink-500"
                 }`}>
                     <div className="text-center">
-                        <div className="text-7xl md:text-8xl mb-4">
-                            {roundResult === "success" ? "🎉" : roundResult === "partial" ? "👍" : "⏱️"}
+                        <div className={`${isMobile ? "text-6xl" : "text-7xl md:text-8xl"} mb-4`}>
+                            {roundResult === "success" ? "🎉" : "❌"}
                         </div>
-                        <h2 className="text-3xl md:text-4xl font-bold text-white mb-4">
-                            {roundResult === "success" 
-                                ? "ممتاز!" 
-                                : roundResult === "partial"
-                                    ? "جيد!"
-                                    : "انتهى الوقت!"}
+                        <h2 className={`${isMobile ? "text-2xl" : "text-3xl md:text-4xl"} font-bold text-white mb-4`}>
+                            {roundResult === "success" ? "ممتاز!" : "للأسف!"}
                         </h2>
-                        <p className="text-lg md:text-xl text-white/90 mb-6">
+                        <p className={`${isMobile ? "text-base" : "text-lg md:text-xl"} text-white/90 mb-6`}>
                             {roundResult === "success"
                                 ? `أحسنت! حصلت على ${earnedPoints} نقطة! 🌟`
-                                : roundResult === "partial"
-                                    ? `حصلت على ${earnedPoints} نقطة من ${currentPrompt.points}`
-                                    : "لم تكمل جميع الإجابات في الوقت المحدد"}
+                                : "إجابة خاطئة - لا نقاط"}
                         </p>
-
-                        {/* User's Answers */}
-                        {userAnswers.filter(a => a.trim()).length > 0 && (
-                            <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 mb-6">
-                                <h3 className="font-bold text-white mb-3 text-lg">إجاباتك:</h3>
-                                <div className="space-y-2">
-                                    {userAnswers.map((answer, index) => answer.trim() && (
-                                        <div key={index} className="flex items-center gap-3 bg-white/20 rounded-xl p-3">
-                                            <div className="w-8 h-8 rounded-full bg-white/30 flex items-center justify-center text-white font-bold flex-shrink-0">
-                                                {index + 1}
-                                            </div>
-                                            <span className="text-white font-medium text-lg">{answer}</span>
-                                            <Check className="w-5 h-5 text-white ml-auto" />
-                                        </div>
-                                    ))}
-                                </div>
-                            </div>
-                        )}
 
                         {/* The original prompt */}
                         <div className="bg-white/20 backdrop-blur-sm rounded-2xl p-6 mb-6">
