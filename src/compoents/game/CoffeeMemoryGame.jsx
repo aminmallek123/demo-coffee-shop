@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { RotateCcw, Trophy, Clock, Zap, ArrowLeft, Coffee } from "lucide-react";
-
+import { useLanguage } from "../../contexts/LanguageContext";
+import { getTranslation } from "../../translations/gameTranslations";
+import LanguageSelector from "../LanguageSelector";
 
 import CoffeeTruthOrDare from "./CoffeeTruthOrDare";
 
@@ -21,6 +23,9 @@ const coffeeItems = [
 ];
 
 export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode }) {
+  const { language } = useLanguage();
+  const t = (key) => getTranslation(language, key);
+  
   const [currentGame, setCurrentGame] = useState("menu");
   const [cards, setCards] = useState([]);
   const [flippedCards, setFlippedCards] = useState([]);
@@ -130,17 +135,20 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <h1 className={`font-bold ${isMobile ? "text-2xl" : "text-4xl"} mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-black'
             }`}>Coffee Games 🎮</h1>
-            <p className={`transition-colors ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>Choose your favorite coffee game!</p>
+            <p className={`transition-colors ${isDarkMode ? 'text-white/60' : 'text-black/60'}`}>{t('selectGame')}</p>
           </div>
-          <div className={`p-4 rounded-xl shadow-lg border-2 transition-colors ${
-            isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-100 border-amber-200'
-          }`}>
-            <Coffee className={`inline w-6 h-6 mr-2 transition-colors ${
-              isDarkMode ? 'text-amber-500' : 'text-amber-600'
-            }`} />
-            <span className={`font-bold text-xl transition-colors ${
-              isDarkMode ? 'text-amber-500' : 'text-amber-800'
-            }`}>{coffeeBeans}</span>
+          <div className="flex items-center gap-4">
+            <div className={`p-4 rounded-xl shadow-lg border-2 transition-colors ${
+              isDarkMode ? 'bg-amber-500/10 border-amber-500/20' : 'bg-amber-100 border-amber-200'
+            }`}>
+              <Coffee className={`inline w-6 h-6 mr-2 transition-colors ${
+                isDarkMode ? 'text-amber-500' : 'text-amber-600'
+              }`} />
+              <span className={`font-bold text-xl transition-colors ${
+                isDarkMode ? 'text-amber-500' : 'text-amber-800'
+              }`}>{coffeeBeans}</span>
+            </div>
+            <LanguageSelector isDarkMode={isDarkMode} />
           </div>
         </div>
 
@@ -157,10 +165,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">🧠</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>Memory Game</h3>
+            }`}>{t('memoryGame')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Match coffee pairs and test your memory!</p>
+            }`}>{t('memoryGameDesc')}</p>
           </div>
 
           {/* لعبة اختيار الإصبع */}
@@ -175,10 +183,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">☝️</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>لعبة اختيار الإصبع</h3>
+            }`}>{t('fingerSelection')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Random finger selection challenge!</p>
+            }`}>{t('fingerSelectionDesc')}</p>
           </div>
 
           {/* تحدي كرة القدم */}
@@ -193,10 +201,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">⚽</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>تحدي كرة القدم</h3>
+            }`}>{t('footballChallenge')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Football trivia and challenges!</p>
+            }`}>{t('footballChallengeDesc')}</p>
           </div>
 
           {/* لعبة الموعد الأول */}
@@ -211,10 +219,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">💕</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>لعبة الموعد الأول</h3>
+            }`}>{t('firstDateGame')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Romantic first date scenarios!</p>
+            }`}>{t('firstDateGameDesc')}</p>
           </div>
 
           {/* Action Vérité */}
@@ -229,10 +237,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">🎭</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>Action Vérité</h3>
+            }`}>{t('truthOrDare')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Truth or dare coffee edition!</p>
+            }`}>{t('truthOrDareDesc')}</p>
           </div>
 
           {/* سمي 3 حاجات */}
@@ -247,10 +255,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             <div className="text-6xl mb-4">🔢</div>
             <h3 className={`font-bold text-xl sm:text-2xl mb-2 transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>سمي 3 حاجات</h3>
+            }`}>{t('nameThreeThings')}</h3>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-600'
-            }`}>Name three things challenge!</p>
+            }`}>{t('nameThreeThingsDesc')}</p>
           </div>
         </div>
       </div>
@@ -287,10 +295,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
           <div>
             <h1 className={`font-bold ${isMobile ? "text-xl" : "text-3xl"} transition-colors ${
               isDarkMode ? 'text-white' : 'text-gray-800'
-            }`}>Coffee Memory Game</h1>
+            }`}>{t('memoryGame')}</h1>
             <p className={`text-sm transition-colors ${
               isDarkMode ? 'text-white/60' : 'text-gray-500'
-            }`}>Match all the coffee pairs!</p>
+            }`}>{t('memoryGameDesc')}</p>
           </div>
         </div>
         <button 
@@ -301,7 +309,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
               : 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
           }`}
         >
-          <RotateCcw className="w-4 h-4 mr-2" /> New Game
+          <RotateCcw className="w-4 h-4 mr-2" /> {t('restart')}
         </button>
       </div>
 
@@ -316,7 +324,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             isDarkMode ? 'text-blue-400' : 'text-blue-600'
           }`}>
             <Zap className="w-5 h-5" />
-            <span className="font-semibold">Moves</span>
+            <span className="font-semibold">{t('moves')}</span>
           </div>
           <p className={`text-2xl font-bold transition-colors ${
             isDarkMode ? 'text-white' : 'text-gray-800'
@@ -331,7 +339,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             isDarkMode ? 'text-green-400' : 'text-green-600'
           }`}>
             <Trophy className="w-5 h-5" />
-            <span className="font-semibold">Pairs</span>
+            <span className="font-semibold">{t('matchedPairs')}</span>
           </div>
           <p className={`text-2xl font-bold transition-colors ${
             isDarkMode ? 'text-white' : 'text-gray-800'
@@ -346,7 +354,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
             isDarkMode ? 'text-purple-400' : 'text-purple-600'
           }`}>
             <Clock className="w-5 h-5" />
-            <span className="font-semibold">Time</span>
+            <span className="font-semibold">{t('time')}</span>
           </div>
           <p className={`text-2xl font-bold transition-colors ${
             isDarkMode ? 'text-white' : 'text-gray-800'
@@ -418,10 +426,10 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
               <div className="text-7xl mb-4">🎉</div>
               <h2 className={`text-3xl font-bold mb-2 transition-colors ${
                 isDarkMode ? 'text-white' : 'text-gray-800'
-              }`}>Congratulations!</h2>
+              }`}>{t('congratulations')}</h2>
               <p className={`mb-6 transition-colors ${
                 isDarkMode ? 'text-white/60' : 'text-gray-600'
-              }`}>You completed the game!</p>
+              }`}>{t('gameComplete')}</p>
               
               <div className="grid grid-cols-2 gap-4 mb-6">
                 <div className={`p-4 rounded-xl transition-colors ${
@@ -432,7 +440,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
                   }`} />
                   <p className={`text-sm transition-colors ${
                     isDarkMode ? 'text-white/60' : 'text-gray-600'
-                  }`}>Moves</p>
+                  }`}>{t('moves')}</p>
                   <p className={`text-2xl font-bold transition-colors ${
                     isDarkMode ? 'text-blue-400' : 'text-blue-600'
                   }`}>{moves}</p>
@@ -445,7 +453,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
                   }`} />
                   <p className={`text-sm transition-colors ${
                     isDarkMode ? 'text-white/60' : 'text-gray-600'
-                  }`}>Time</p>
+                  }`}>{t('time')}</p>
                   <p className={`text-2xl font-bold transition-colors ${
                     isDarkMode ? 'text-purple-400' : 'text-purple-600'
                   }`}>{formatTime(timeElapsed)}</p>
@@ -491,7 +499,7 @@ export default function CoffeeMemoryGame({ isMobile, setCurrentView, isDarkMode 
                     : 'bg-gradient-to-br from-orange-500 to-red-500 text-white'
                 }`}
               >
-                Play Again
+                {t('restart')}
               </button>
             </div>
           </div>
